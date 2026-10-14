@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UoB Dashboard</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>UoB Dashboard</h1>
+    <div class="header-actions">
+      <button id="refreshBtn" title="Refresh all sources" aria-label="Refresh all sources">↻</button>
+      <button id="settingsBtn" title="Settings" aria-label="Open settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Refresh progress bar -->
+  <div id="refreshBar" class="hidden refresh-bar" role="status" aria-live="polite">
+    <div id="refreshBarFill" class="refresh-bar-fill"></div>
+    <span id="refreshStatus" class="refresh-status-text">Refreshing…</span>
+  </div>
+
+  <!-- Settings panel (hidden by default) -->
+  <section id="settingsPanel" class="hidden" aria-label="Settings">
+    <h2>Keyword Filters</h2>
+    <p class="hint">Emails matching any keyword will appear below.</p>
+    <div id="keywordList" role="list" aria-label="Current keywords"></div>
+    <div class="keyword-input-row">
+      <input id="newKeyword" type="text" placeholder="Add keyword…" aria-label="New keyword" />
+      <button id="addKeywordBtn">Add</button>
+    </div>
+    <div class="settings-actions">
+      <button id="saveSettingsBtn" class="primary">Save</button>
+      <button id="cancelSettingsBtn">Cancel</button>
+    </div>
+  </section>
+
+  <!-- Main content -->
+  <main id="mainContent">
+    <!-- Filter tabs -->
+    <nav class="tabs" role="tablist" aria-label="Source filter">
+      <button class="tab active" data-filter="all" role="tab" aria-selected="true">All</button>
+      <button class="tab" data-filter="canvas" role="tab" aria-selected="false">Canvas</button>
+      <button class="tab" data-filter="myuob" role="tab" aria-selected="false">MyUoB</button>
+      <button class="tab" data-filter="outlook" role="tab" aria-selected="false">Outlook</button>
+    </nav>
+
+    <div id="lastUpdated" class="hint"></div>
+
+    <!-- Item list -->
+    <ul id="itemList" role="list" aria-label="Dashboard items" aria-live="polite"></ul>
+
+    <div id="emptyState" class="hidden empty-state">
+      <p>Nothing to show yet.</p>
+      <p class="hint">Press ↻ to refresh, or visit Canvas, MyUoB & Outlook manually.</p>
+      <button id="debugBtn" class="debug-btn">Show debug info</button>
+    </div>
+
+    <div id="loadingState" class="loading">Loading…</div>
+
+    <!-- Debug panel -->
+    <pre id="debugPanel" class="hidden debug-panel"></pre>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
