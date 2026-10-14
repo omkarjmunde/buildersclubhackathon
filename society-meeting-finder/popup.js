@@ -38,8 +38,14 @@ function parseFields(text) {
     .filter(Boolean)
     .map(line => {
       const eq = line.indexOf("=");
-      const name = eq > -1 ? line.slice(0, eq).trim() : line;
-      let rest = eq > -1 ? line.slice(eq + 1).trim() : line;
+      const name = eq > -1
+        ? line.slice(0, eq).trim()
+        : line;
+
+      let rest = eq > -1
+        ? line.slice(eq + 1).trim()
+        : line;
+
       let attr = "";
       const at = rest.lastIndexOf("@");
 
@@ -144,7 +150,6 @@ function render(data) {
 
       if (record.url && /^https?:/i.test(record.url)) {
         const link = el("a", null, record.url);
-
         link.href = record.url;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
@@ -224,9 +229,7 @@ function buildOutput() {
 
   return {
     ...base,
-    ...(siteScanStats
-      ? { scan_stats: siteScanStats }
-      : {}),
+    ...(siteScanStats ? { scan_stats: siteScanStats } : {}),
     ...(siteScanErrors.length
       ? { scan_errors: siteScanErrors }
       : {}),
@@ -340,23 +343,22 @@ async function scanWebsite() {
     return;
   }
 
-  // Request permission for the selected website.
-  // This origin must be listed in optional_host_permissions
-  // in manifest.json.
+  // Request access to the selected website.
+  // This must be called from the button-click flow.
+  let granted;
+
   try {
-    const granted = await chrome.permissions.request({
+    granted = await chrome.permissions.request({
       origins: [start.origin + "/*"]
     });
-
-    if (!granted) {
-      status.textContent = "Website access was not granted.";
-      return;
-    }
   } catch (error) {
     status.textContent =
-      "Could not request website access: " +
-      error.message +
-      ". Check optional_host_permissions in manifest.json and reload the extension.";
+      "Could not request website access: " + error.message;
+    return;
+  }
+
+  if (!granted) {
+    status.textContent = "Website access was not granted.";
     return;
   }
 
@@ -369,11 +371,10 @@ async function scanWebsite() {
   const canonical = value => {
     const url = new URL(value);
 
-    // Fragments do not identify separate server pages.
+    // Treat fragment-only differences as the same page.
     url.hash = "";
 
-    // Treat trailing-slash variants as the same URL,
-    // except for the root path.
+    // Normalize trailing slashes except for the root page.
     if (url.pathname.length > 1) {
       url.pathname = url.pathname.replace(/\/+$/, "");
     }
@@ -382,12 +383,14 @@ async function scanWebsite() {
   };
 
   const startURL = canonical(start.href);
-  const queue = [{ url: startURL }];
+
+  // Queue every discovered page and process until no pages remain.
+  // There is intentionally no page-count or link-depth limit.
+  const queue = [startURL];
   const queued = new Set([startURL]);
   const visited = new Set();
   const records = [];
   const errors = [];
-  const seenSitemaps = new Set();
 
   function sameOrigin(value) {
     try {
@@ -397,24 +400,16 @@ async function scanWebsite() {
     }
   }
 
-  function addLink(value) {
+  function addLink(value, baseURL) {
     try {
-      const url = new URL(value, start.href);
+      const url = new URL(value, baseURL);
 
-      if (!["http:", "https:"].includes(url.protocol)) {
-        return;
-      }
+      if (!["http:", "https:"].includes(url.protocol)) return;
+      if (url.origin !== start.origin) return;
 
-      // Keep the crawl on the selected origin.
-      if (url.origin !== start.origin) {
-        return;
-      }
-
-      // Skip common files that are not HTML pages.
-      // Calendar files can still be detected as links by
-      // findMeetings when the page contains them.
+      // Skip common non-HTML resources.
       if (
-        /\.(?:pdf|jpg|jpeg|png|gif|svg|zip|docx?|xlsx?|pptx?|mp4|mp3|ics)$/i
+        /\.(?:pdf|jpg|jpeg|png|gif|svg|webp|zip|docx?|xlsx?|pptx?|mp4|mp3|wav|ics|woff2?|ttf|eot)$/i
           .test(url.pathname)
       ) {
         return;
@@ -422,15 +417,12 @@ async function scanWebsite() {
 
       const key = canonical(url.href);
 
-      // Prevent duplicate visits and link loops.
-      if (queued.has(key)) {
-        return;
-      }
+      if (queued.has(key) || visited.has(key)) return;
 
       queued.add(key);
-      queue.push({ url: key });
+      queue.push(key);
     } catch {
-      // Ignore malformed URLs.
+      // Ignore invalid URLs.
     }
   }
 
@@ -449,29 +441,24 @@ async function scanWebsite() {
       throw new Error("Redirected outside the selected website.");
     }
 
-    return response.text();
+    return response;
   }
 
-  async function readSitemap(url, suppliedText = null) {
-    if (!sameOrigin(url) || seenSitemaps.has(url)) {
-      return;
-    }
+  async function readSitemap(url, state) {
+    if (!sameOrigin(url) || state.seen.has(url)) return;
 
-    seenSitemaps.add(url);
+    state.seen.add(url);
 
     try {
-      const xml = suppliedText == null
-        ? await fetchText(url)
-        : suppliedText;
+      const response = await fetchText(url);
+      const xml = await response.text();
 
       const xmlDoc = new DOMParser().parseFromString(
         xml,
         "application/xml"
       );
 
-      if (xmlDoc.querySelector("parsererror")) {
-        return;
-      }
+      if (xmlDoc.querySelector("parsererror")) return;
 
       const isIndex = !!xmlDoc.querySelector("sitemap loc");
       const selector = isIndex ? "sitemap loc" : "url loc";
@@ -479,112 +466,92 @@ async function scanWebsite() {
       for (const element of xmlDoc.querySelectorAll(selector)) {
         const link = element.textContent.trim();
 
-        if (!sameOrigin(link)) {
-          continue;
-        }
+        if (!sameOrigin(link)) continue;
 
         if (isIndex) {
-          await readSitemap(link);
+          // Sitemap indexes can point to other sitemap indexes.
+          // The seen set prevents loops.
+          await readSitemap(link, state);
         } else {
-          addLink(link);
+          addLink(link, start.href);
         }
       }
     } catch {
-      // An inaccessible sitemap should not stop the crawl.
+      // Sitemaps are optional; ordinary links are still crawled.
     }
   }
 
   async function seedSitemaps() {
+    const state = { seen: new Set() };
+
+    // First look for sitemap declarations in robots.txt.
     try {
-      const robotsURL = new URL(
-        "/robots.txt",
-        start.origin
-      ).href;
+      const robotsURL = new URL("/robots.txt", start.origin).href;
+      const response = await fetchText(robotsURL);
+      const text = await response.text();
 
-      const text = await fetchText(robotsURL);
-
-      const sitemaps =
-        text.match(/^\s*Sitemap:\s*\S+/gim) || [];
+      const sitemaps = text.match(
+        /^\s*Sitemap:\s*\S+/gim
+      ) || [];
 
       for (const line of sitemaps) {
-        const url = line
-          .replace(/^\s*Sitemap:\s*/i, "")
-          .trim();
+        const url = line.replace(/^\s*Sitemap:\s*/i, "").trim();
 
         if (sameOrigin(url)) {
-          await readSitemap(url);
+          await readSitemap(url, state);
         }
       }
     } catch {
-      // robots.txt is optional.
+      // robots.txt may not exist or may not be accessible.
     }
 
-    await readSitemap(
-      new URL("/sitemap.xml", start.origin).href
-    );
-
-    await readSitemap(
-      new URL("/sitemap_index.xml", start.origin).href
-    );
+    // Also try common sitemap locations.
+    for (const path of ["/sitemap.xml", "/sitemap_index.xml"]) {
+      const url = new URL(path, start.origin).href;
+      await readSitemap(url, state);
+    }
   }
 
   try {
     rows = [];
     siteScanErrors = [];
     siteScanStats = null;
-
     render([]);
+
     status.textContent = "Discovering pages and sitemaps…";
 
-    // Sitemaps can expose pages that are not linked from the homepage.
+    // Sitemap URLs are added to the same queue as ordinary links.
     await seedSitemaps();
 
-    // Ensure the exact starting URL is scanned first.
-    const startIndex = queue.findIndex(
-      item => canonical(item.url) === startURL
-    );
+    // Ensure the supplied starting URL is scanned first.
+    const startIndex = queue.indexOf(startURL);
 
     if (startIndex > 0) {
-      queue.unshift(queue.splice(startIndex, 1)[0]);
+      queue.splice(startIndex, 1);
+      queue.unshift(startURL);
     }
 
-    // No arbitrary page-count or link-depth limit.
-    // Continue until every discovered URL has been processed.
-    while (queue.length) {
-      const item = queue.shift();
-      const pageURL = canonical(item.url);
+    // Core recursive crawl:
+    // every page is fetched, parsed, scraped, and its links are queued.
+    // The loop ends only when no discovered pages remain.
+    while (queue.length > 0) {
+      const pageURL = queue.shift();
 
-      if (visited.has(pageURL)) {
-        continue;
-      }
+      if (visited.has(pageURL)) continue;
 
       visited.add(pageURL);
 
       status.textContent =
-        `Scanned ${visited.size} page(s); ` +
-        `${queue.length} queued. Reading ${pageURL}`;
+        `Scanned ${visited.size} page(s). ` +
+        `Queue: ${queue.length}. Reading ${pageURL}`;
 
       try {
-        const response = await fetch(pageURL, {
-          credentials: "omit",
-          redirect: "follow",
-          signal: AbortSignal.timeout(20000)
-        });
-
-        if (!response.ok) {
-          throw new Error("HTTP " + response.status);
-        }
-
-        if (!sameOrigin(response.url)) {
-          throw new Error(
-            "Redirected outside the selected website."
-          );
-        }
+        const response = await fetchText(pageURL);
 
         const contentType =
           response.headers.get("content-type") || "";
 
-        // Only parse HTML/XHTML pages for links and meetings.
+        // Non-HTML resources are not parsed as pages.
         if (
           !contentType.includes("text/html") &&
           !contentType.includes("application/xhtml+xml")
@@ -599,7 +566,7 @@ async function scanWebsite() {
           "text/html"
         );
 
-        // Search this page for meeting information.
+        // Extract meeting/event information from this page.
         const found = findMeetings(pageDoc);
         const pageTitle = pageDoc.title || "";
 
@@ -611,48 +578,63 @@ async function scanWebsite() {
           });
         }
 
-        // Follow every same-origin link discovered on this page.
+        // IMPORTANT:
+        // Inspect links on EVERY fetched HTML page.
+        // Newly discovered links are added to the queue and later scanned.
         for (const link of pageDoc.querySelectorAll("a[href]")) {
-          addLink(link.href);
+          addLink(link.getAttribute("href"), pageURL);
         }
 
-        // Also discover canonical URLs.
-        for (
-          const link of pageDoc.querySelectorAll(
-            'link[rel="canonical"][href]'
-          )
-        ) {
-          addLink(link.href);
+        // Also inspect canonical URLs when present.
+        const canonicalLink = pageDoc.querySelector(
+          'link[rel="canonical"][href]'
+        );
+
+        if (canonicalLink) {
+          addLink(canonicalLink.getAttribute("href"), pageURL);
+        }
+
+        // Discover URLs in iframes that are on the same origin.
+        for (const frame of pageDoc.querySelectorAll("iframe[src]")) {
+          addLink(frame.getAttribute("src"), pageURL);
+        }
+
+        // Discover same-origin links in common metadata elements.
+        for (const meta of pageDoc.querySelectorAll(
+          'meta[http-equiv="refresh"][content]'
+        )) {
+          const content = meta.getAttribute("content") || "";
+          const match = content.match(/url\s*=\s*['"]?([^'";]+)['"]?/i);
+
+          if (match) {
+            addLink(match[1].trim(), pageURL);
+          }
         }
       } catch (error) {
-        // Record the failure and continue with other pages.
         errors.push({
           url: pageURL,
-          error: error.message
+          error: error.message || String(error)
         });
       }
     }
 
-    // Deduplicate repeated findings while retaining page provenance.
+    // Deduplicate identical findings from the same page.
+    // Keep page_url in the key so results from different pages remain traceable.
     const unique = new Map();
 
     for (const record of records) {
       const key = [
         record.page_url,
         record.source,
-        record.days,
+        Array.isArray(record.days)
+          ? record.days.join(",")
+          : record.days,
         record.start,
         record.end,
         record.location,
         record.url,
         record.text
-      ]
-        .map(value =>
-          typeof value === "string"
-            ? value
-            : JSON.stringify(value)
-        )
-        .join("|");
+      ].join("|");
 
       if (!unique.has(key)) {
         unique.set(key, record);
@@ -667,12 +649,12 @@ async function scanWebsite() {
     };
 
     siteScanErrors = errors;
-
     siteScanStats = {
       pages_scanned: visited.size,
       pages_discovered: queued.size,
       pages_failed: errors.length,
-      pages_remaining: queue.length
+      pages_remaining: queue.length,
+      crawl_scope: "same-origin"
     };
 
     render(rows);
@@ -683,7 +665,8 @@ async function scanWebsite() {
     status.textContent =
       `Finished: scanned ${visited.size} page(s), ` +
       `found ${rows.length} result(s), ` +
-      `${errors.length} page(s) failed.`;
+      `${errors.length} page(s) failed. ` +
+      `All discovered same-origin HTML links have been processed.`;
   } catch (error) {
     status.textContent =
       "Website scan failed: " + error.message;
