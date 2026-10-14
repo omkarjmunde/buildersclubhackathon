@@ -1,0 +1,19 @@
+
+{
+  "manifest_version": 3,
+  "name": "Society Meeting Finder & Page Scraper",
+  "version": "1.2.1",
+  "description": "Find society meetings across a website or scrape pages with CSS selectors. Export results as JSON or CSV.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Meeting Finder"
+  }
+}

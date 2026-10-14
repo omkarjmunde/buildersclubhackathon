@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      width: 380px;
+      font: 13px system-ui, sans-serif;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: 13px;
+      margin: 14px 0 6px;
+    }
+
+    button {
+      padding: 7px 10px;
+      cursor: pointer;
+      margin: 6px 6px 0 0;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+
+    button.primary {
+      font-weight: 600;
+    }
+
+    #status {
+      margin-top: 8px;
+      opacity: .8;
+      overflow-wrap: anywhere;
+    }
+
+    #results {
+      max-height: 260px;
+      overflow: auto;
+      margin-top: 8px;
+    }
+
+    .row {
+      border: 1px solid #8884;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      overflow-wrap: anywhere;
+    }
+
+    .row b {
+      display: block;
+    }
+
+    .src {
+      font-size: 10px;
+      text-transform: uppercase;
+      opacity: .6;
+    }
+
+    .snip {
+      font-size: 11px;
+      opacity: .7;
+      margin-top: 2px;
+      word-break: break-word;
+    }
+
+    label {
+      display: block;
+      margin: 8px 0 3px;
+      font-weight: 600;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px;
+      font: 12px monospace;
+    }
+
+    input[type="number"] {
+      margin-bottom: 4px;
+    }
+
+    textarea {
+      height: 80px;
+    }
+
+    small {
+      opacity: .65;
+      font-weight: 400;
+    }
+
+    details {
+      margin-top: 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    #scanSite {
+      width: 100%;
+    }
+
+    .hint {
+      font-size: 11px;
+      opacity: .7;
+      line-height: 1.4;
+    }
+
+    a {
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <h1>Society Meeting Finder</h1>
+
+  <button id="find" class="primary">
+    Find meeting times on this page
+  </button>
+
+  <hr>
+
+  <h2>Scan an entire website</h2>
+
+  <label for="siteUrl">Website URL</label>
+  <input
+    id="siteUrl"
+    type="url"
+    placeholder="https://example.org"
+  >
+
+  <label for="maxPages">Maximum pages (1–500)</label>
+  <input
+    id="maxPages"
+    type="number"
+    min="1"
+    max="500"
+    value="100"
+  >
+
+  <label for="maxDepth">Link depth (0–10)</label>
+  <input
+    id="maxDepth"
+    type="number"
+    min="0"
+    max="10"
+    value="3"
+  >
+
+  <button id="scanSite" class="primary">
+    Scan website for meetings
+  </button>
+
+  <p class="hint">
+    Scans accessible pages on the same origin. Keep this popup open
+    until scanning finishes. Sites requiring login or JavaScript
+    rendering may need a different scanning method.
+  </p>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="results"></div>
+
+  <div>
+    <button id="json" disabled>Download JSON</button>
+    <button id="csv" disabled>Download CSV</button>
+  </div>
+
+  <details>
+    <summary>Custom selectors</summary>
+
+    <label for="item">
+      Item selector <small>(repeating container, optional)</small>
+    </label>
+    <input id="item" placeholder=".meeting">
+
+    <label for="fields">
+      Fields <small>(name=selector@attribute)</small>
+    </label>
+    <textarea
+      id="fields"
+      placeholder="day=.day&#10;time=.time&#10;place=.location"
+    ></textarea>
+
+    <button id="scrape">Scrape with selectors</button>
+  </details>
+
+  <script src="finder.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
