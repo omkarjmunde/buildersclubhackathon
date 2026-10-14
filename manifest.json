@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "UoB Dashboard",
+  "version": "1.0.0",
+  "description": "Aggregates assignments, deadlines and important notifications from Canvas, MyUoB and Outlook.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://canvas.bham.ac.uk/*",
+    "https://myuob.bham.ac.uk/*",
+    "https://api.myday.cloud/*",
+    "https://outlook.office.com/*",
+    "https://graph.microsoft.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://canvas.bham.ac.uk/*"],
+      "js": ["content-scripts/canvas.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://myuob.bham.ac.uk/*"],
+      "js": ["content-scripts/myuob.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://outlook.office.com/*"],
+      "js": ["content-scripts/outlook.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "UoB Dashboard",
+    "default_icon": {
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}
